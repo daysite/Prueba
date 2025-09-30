@@ -1,3 +1,4 @@
+// commands/play.js
 const axios = require("axios");
 const yts = require("yt-search");
 const fs = require("fs");
@@ -7,19 +8,51 @@ const { promisify } = require("util");
 const { pipeline } = require("stream");
 const streamPipe = promisify(pipeline);
 
+// ==== CONFIG DE TU API ====
+const API_BASE = process.env.API_BASE || "https://api-sky.ultraplus.click";
+const API_KEY  = process.env.API_KEY  || "Russellxz"; // <-- tu API Key
+
 // Almacena tareas pendientes por previewMessageId
 const pending = {};
+
+// Utilidad: descarga a disco y devuelve ruta
+async function downloadToFile(url, filePath) {
+  const res = await axios.get(url, { responseType: "stream" });
+  await streamPipe(res.data, fs.createWriteStream(filePath));
+  return filePath;
+}
+
+// Utilidad: tamaño en MB (decimal)
+function fileSizeMB(filePath) {
+  const b = fs.statSync(filePath).size;
+  return b / (1024 * 1024);
+}
+
+// Llama a tu API /api/download/yt.php
+async function callMyApi(url, format) {
+  const r = await axios.get(`${API_BASE}/api/download/yt.php`, {
+    params: { url, format }, // format: 'audio' | 'video'
+    headers: { Authorization: `Bearer ${API_KEY}` },
+    timeout: 60000
+  });
+  // Estructura esperada: { status:'true', data:{ title, audio, video, thumbnail, ... } }
+  if (!r.data || r.data.status !== "true" || !r.data.data) {
+    throw new Error("API inválida o sin datos");
+  }
+  return r.data.data;
+}
 
 module.exports = async (msg, { conn, text }) => {
   const pref = global.prefixes?.[0] || ".";
 
   if (!text || !text.trim()) {
-  return conn.sendMessage(
-    msg.key.remoteJid,
-    { text: `✳️ Usa:\n${pref}play <término>\nEj: *${pref}play* bad bunny diles` },
-    { quoted: msg }
-  );
-}
+    return conn.sendMessage(
+      msg.key.remoteJid,
+      { text: `✳️ Usa:\n${pref}play <término>\nEj: *${pref}play* bad bunny diles` },
+      { quoted: msg }
+    );
+  }
+
   // reacción de carga
   await conn.sendMessage(msg.key.remoteJid, {
     react: { text: "⏳", key: msg.key }
@@ -27,7 +60,7 @@ module.exports = async (msg, { conn, text }) => {
 
   // búsqueda
   const res = await yts(text);
-  const video = res.videos[0];
+  const video = res.videos?.[0];
   if (!video) {
     return conn.sendMessage(
       msg.key.remoteJid,
@@ -36,34 +69,33 @@ module.exports = async (msg, { conn, text }) => {
     );
   }
 
-  const { url: videoUrl, title, timestamp: duration, views, author } = video;
-  const viewsFmt = views.toLocaleString();
+  const { url: videoUrl, title, timestamp: duration, views, author, thumbnail } = video;
+  const viewsFmt = (views || 0).toLocaleString();
 
   const caption = `
-
 ❦𝑳𝑨 𝑺𝑼𝑲𝑰 𝑩𝑶𝑻❦
 
-📀𝙸𝚗𝚏𝚘 𝚍𝚎𝚕 𝚟𝚒𝚍𝚎𝚘:
+📀 𝙸𝚗𝚏𝚘 𝚍𝚎𝚕 𝚟𝚒𝚍𝚎𝚘:
+❥ 𝑻𝒊𝒕𝒖𝒍𝒐: ${title}
+❥ 𝑫𝒖𝒓𝒂𝒄𝒊𝒐𝒏: ${duration}
+❥ 𝑽𝒊𝒔𝒕𝒂𝒔: ${viewsFmt}
+❥ 𝑨𝒖𝒕𝒐𝒓: ${author?.name || author || "Desconocido"}
+❥ 𝑳𝒊𝒏𝒌: ${videoUrl}
+❥ API: api-sky.ultraplus.click
 
-❥𝑻𝒊𝒕𝒖𝒍𝒐: ${title}
-❥𝑫𝒖𝒓𝒂𝒄𝒊𝒐𝒏: ${duration}
-❥𝑽𝒊𝒔𝒕𝒂𝒔: ${viewsFmt}
-❥𝑨𝒖𝒕𝒐𝒓: ${author}
-❥𝑳𝒊𝒏𝒌: ${videoUrl}
-
-📥 𝙾𝚙𝚌𝚒𝚘𝚗𝚎𝚜 𝚍𝚎 𝙳𝚎𝚜𝚌𝚊𝚛𝚐𝚊 𝚛𝚎𝚊𝚌𝚒𝚘𝚗𝚎 𝚘 𝚛𝚎𝚜𝚙𝚘𝚗𝚍𝚊 𝚎𝚕 𝚖𝚎𝚗𝚜𝚊𝚓𝚎 𝚍𝚎𝚕 𝚋𝚘𝚝🎮:
+📥 𝙾𝚙𝚌𝚒𝚘𝚗𝚎𝚜 𝚍𝚎 𝙳𝚎𝚜𝚌𝚊𝚛𝚐𝚊 (reacciona o responde al mensaje):
 ☛ 👍 Audio MP3     (1 / audio)
 ☛ ❤️ Video MP4     (2 / video)
 ☛ 📄 Audio Doc     (4 / audiodoc)
 ☛ 📁 Video Doc     (3 / videodoc)
- 
+
 ❦𝑳𝑨 𝑺𝑼𝑲𝑰 𝑩𝑶𝑻❦
 `.trim();
 
   // envía preview
   const preview = await conn.sendMessage(
     msg.key.remoteJid,
-    { image: { url: video.thumbnail }, caption },
+    { image: { url: thumbnail }, caption },
     { quoted: msg }
   );
 
@@ -141,7 +173,7 @@ module.exports = async (msg, { conn, text }) => {
   }
 };
 
-async function handleDownload(conn, job, choice, quotedMsg) {
+async function handleDownload(conn, job, choice) {
   const mapping = {
     "👍": "audio",
     "❤️": "video",
@@ -159,49 +191,100 @@ async function handleDownload(conn, job, choice, quotedMsg) {
 
 async function downloadAudio(conn, job, asDocument, quoted) {
   const { chatId, videoUrl, title } = job;
-  const api = `https://api.neoxr.eu/api/youtube?url=${encodeURIComponent(videoUrl)}&type=audio&quality=128kbps&apikey=russellxz`;
-  const res = await axios.get(api);
-  if (!res.data?.status || !res.data.data?.url) throw new Error("No se pudo obtener el audio");
+
+  // 1) Pide a TU API audio (descuenta soli en servidor)
+  const data = await callMyApi(videoUrl, "audio");
+  const mediaUrl = data.audio || data.video; // fallback si el upstream devolviera solo video
+
+  if (!mediaUrl) throw new Error("No se pudo obtener audio");
+
+  // 2) Descarga + (opcional) convierte a MP3 si no es mp3/mpeg
   const tmp = path.join(__dirname, "../tmp");
-  if (!fs.existsSync(tmp)) fs.mkdirSync(tmp);
-  const inFile = path.join(tmp, `${Date.now()}_in.m4a`);
-  const outFile = path.join(tmp, `${Date.now()}_out.mp3`);
-  const download = await axios.get(res.data.data.url, { responseType: "stream" });
-  await streamPipe(download.data, fs.createWriteStream(inFile));
-  await new Promise((r, e) => ffmpeg(inFile).audioCodec("libmp3lame").audioBitrate("128k").format("mp3").save(outFile).on("end", r).on("error", e));
+  if (!fs.existsSync(tmp)) fs.mkdirSync(tmp, { recursive: true });
+
+  // detecta extensión
+  const urlPath = new URL(mediaUrl).pathname || "";
+  const ext = (urlPath.split(".").pop() || "").toLowerCase();
+  const isMp3 = ext === "mp3";
+
+  const inFile  = path.join(tmp, `${Date.now()}_in.${ext || "bin"}`);
+  await downloadToFile(mediaUrl, inFile);
+
+  let outFile = inFile;
+  if (!isMp3) {
+    // convertir a mp3 (si falla, mandamos el original como documento)
+    const tryOut = path.join(tmp, `${Date.now()}_out.mp3`);
+    try {
+      await new Promise((resolve, reject) =>
+        ffmpeg(inFile)
+          .audioCodec("libmp3lame")
+          .audioBitrate("128k")
+          .format("mp3")
+          .save(tryOut)
+          .on("end", resolve)
+          .on("error", reject)
+      );
+      outFile = tryOut;
+      // limpia entrada original
+      try { fs.unlinkSync(inFile); } catch {}
+    } catch (e) {
+      // fallback: mandamos el original como documento de audio
+      outFile = inFile;
+    }
+  }
+
+  // 3) Límite ~99MB
+  const sizeMB = fileSizeMB(outFile);
+  if (sizeMB > 99) {
+    try { fs.unlinkSync(outFile); } catch {}
+    await conn.sendMessage(chatId, { text: `❌ El archivo de audio pesa ${sizeMB.toFixed(2)}MB (>99MB).` }, { quoted });
+    return;
+  }
+
+  // 4) Enviar
   const buffer = fs.readFileSync(outFile);
   await conn.sendMessage(chatId, {
     [asDocument ? "document" : "audio"]: buffer,
     mimetype: "audio/mpeg",
     fileName: `${title}.mp3`
   }, { quoted });
-  fs.unlinkSync(inFile);
-  fs.unlinkSync(outFile);
+
+  try { fs.unlinkSync(outFile); } catch {}
 }
 
 async function downloadVideo(conn, job, asDocument, quoted) {
   const { chatId, videoUrl, title } = job;
-  const qualities = ["720p","480p","360p"];
-  let url = null;
-  for (let q of qualities) {
-    try {
-      const r = await axios.get(`https://api.neoxr.eu/api/youtube?url=${encodeURIComponent(videoUrl)}&type=video&quality=${q}&apikey=russellxz`);
-      if (r.data?.status && r.data.data?.url) { url = r.data.data.url; break; }
-    } catch {}
-  }
-  if (!url) throw new Error("No se pudo obtener el video");
+
+  // 1) Pide a TU API video (descuenta soli en servidor)
+  const data = await callMyApi(videoUrl, "video");
+  const mediaUrl = data.video || data.audio; // fallback
+
+  if (!mediaUrl) throw new Error("No se pudo obtener video");
+
+  // 2) Descarga
   const tmp = path.join(__dirname, "../tmp");
-  if (!fs.existsSync(tmp)) fs.mkdirSync(tmp);
+  if (!fs.existsSync(tmp)) fs.mkdirSync(tmp, { recursive: true });
   const file = path.join(tmp, `${Date.now()}_vid.mp4`);
-  const dl = await axios.get(url, { responseType: "stream" });
-  await streamPipe(dl.data, fs.createWriteStream(file));
+  await downloadToFile(mediaUrl, file);
+
+  // 3) Límite ~99MB
+  const sizeMB = fileSizeMB(file);
+  if (sizeMB > 99) {
+    try { fs.unlinkSync(file); } catch {}
+    await conn.sendMessage(chatId, { text: `❌ El video pesa ${sizeMB.toFixed(2)}MB (>99MB).` }, { quoted });
+    return;
+  }
+
+  // 4) Enviar (solo añadí la línea de marca)
   await conn.sendMessage(chatId, {
     [asDocument ? "document" : "video"]: fs.readFileSync(file),
     mimetype: "video/mp4",
     fileName: `${title}.mp4`,
-    caption: asDocument ? undefined : `🎬 𝐀𝐪𝐮𝐢́ 𝐭𝐢𝐞𝐧𝐞𝐬 𝐭𝐮 𝐯𝐢𝐝𝐞𝐨~ 💫\n© 𝐋𝐚 𝐒𝐮𝐤𝐢 𝐁𝐨𝐭`
+    caption: `🎬 𝐀𝐪𝐮𝐢́ 𝐭𝐢𝐞𝐧𝐞𝐬 𝐭𝐮 𝐯𝐢𝐝𝐞𝐨~ 💫\n• API: api-sky.ultraplus.click\n© 𝐋𝐚 𝐒𝐮𝐤𝐢 𝐁𝐨𝐭`
   }, { quoted });
-  fs.unlinkSync(file);
+
+  try { fs.unlinkSync(file); } catch {}
 }
 
+// 🔔 Solo cambié el nombre del comando aquí:
 module.exports.command = ["play"];
