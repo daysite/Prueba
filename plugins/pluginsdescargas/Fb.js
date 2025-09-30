@@ -1,164 +1,182 @@
-// fb.js — comando Facebook adaptado a api-sky.ultraplus.click (con estilo Suki)
+// ig.js — comando Instagram adaptado a api-sky.ultraplus.click (JS) con estilo “Suki”
 const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
 
 const API_BASE = "https://api-sky.ultraplus.click";
-const SKY_API_KEY = process.env.SKY_API_KEY || global.SKY_API_KEY || "Russellxz"; // <-- pon tu key
+const SKY_API_KEY = "Russellxz";           // ← tu API Key
 const MAX_MB = 99;
 
-function fmtDur(s) {
-  const n = Number(s || 0);
-  const h = Math.floor(n / 3600);
-  const m = Math.floor((n % 3600) / 60);
-  const sec = n % 60;
-  return (h ? `${h}:` : "") + `${m.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}`;
+function isIG(u = "") {
+  return /(instagram\.com|instagr\.am)/i.test(u);
+}
+function mb(n) { return n / (1024 * 1024); }
+function extFromCT(ct = "", def = "bin") {
+  const c = ct.toLowerCase();
+  if (c.includes("mp4")) return "mp4";
+  if (c.includes("jpeg")) return "jpg";
+  if (c.includes("jpg")) return "jpg";
+  if (c.includes("png")) return "png";
+  if (c.includes("webp")) return "webp";
+  return def;
 }
 
-async function callSkyFacebook(url) {
-  if (!SKY_API_KEY) throw new Error("Falta SKY_API_KEY");
+// ---- Llama a tu API Sky (intenta .js y si 404, hace fallback al .php)
+async function callSkyInstagram(url) {
   const headers = { Authorization: `Bearer ${SKY_API_KEY}` };
-
-  // 1) endpoint .js
   try {
-    const r = await axios.get(`${API_BASE}/api/download/facebook`, {
-      params: { url },
-      headers,
-      timeout: 30000
+    const r = await axios.get(`${API_BASE}/api/download/instagram`, {
+      params: { url }, headers, timeout: 30000,
     });
-    if (r.data?.status === "true" && r.data?.data) return r.data;
-  } catch (_) { /* seguimos al fallback */ }
+    if ((r.data?.status === "true" || r.data?.status === true) && r.data?.data?.media?.length) {
+      return r.data.data; // { shortcode, author, caption, media:[{type,url,...}] }
+    }
+    throw new Error(r.data?.error || "no_media");
+  } catch (e) {
+    // fallback si fue 404 / not found / route legacy
+    if (e?.response?.status === 404) {
+      const r2 = await axios.get(`${API_BASE}/api/download/instagram.php`, {
+        params: { url }, headers, timeout: 30000,
+      });
+      if ((r2.data?.status === "true" || r2.data?.status === true) && r2.data?.data?.media?.length) {
+        return r2.data.data;
+      }
+      throw new Error(r2.data?.error || `HTTP ${r2.status}`);
+    }
+    throw e;
+  }
+}
 
-  // 2) fallback .php (por compatibilidad)
-  const r2 = await axios.get(`${API_BASE}/api/download/facebook.php`, {
-    params: { url },
-    headers,
-    timeout: 30000
+async function downloadToTmp(fileUrl, preferExt = "bin") {
+  const tmp = path.resolve("./tmp");
+  if (!fs.existsSync(tmp)) fs.mkdirSync(tmp, { recursive: true });
+
+  const res = await axios.get(fileUrl, {
+    responseType: "stream",
+    timeout: 120000,
+    headers: {
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+      Referer: "https://www.instagram.com/",
+      Accept: "*/*",
+    },
+    maxRedirects: 5,
   });
-  if (r2.data?.status === "true" && r2.data?.data) return r2.data;
 
-  // si llega aquí, devolvemos error legible
-  const errMsg = r2.data?.error || "no_media_found";
-  const httpMsg = r2.status ? `HTTP ${r2.status}` : "sin respuesta";
-  throw new Error(`Sky API fallo: ${errMsg} (${httpMsg})`);
+  const ext = extFromCT(res.headers["content-type"], preferExt);
+  const filePath = path.join(tmp, `ig-${Date.now()}-${Math.floor(Math.random() * 1e5)}.${ext}`);
+
+  await new Promise((resolve, reject) => {
+    const w = fs.createWriteStream(filePath);
+    res.data.pipe(w);
+    w.on("finish", resolve);
+    w.on("error", reject);
+  });
+
+  return { path: filePath, mime: res.headers["content-type"] || "application/octet-stream" };
 }
 
 const handler = async (msg, { conn, args, command }) => {
   const chatId = msg.key.remoteJid;
-  const text = args.join(" ").trim();
-  const pref = (global.prefixes?.[0] || ".");
+  const text = (args.join(" ") || "").trim();
+  const pref = global.prefixes?.[0] || ".";
 
   if (!text) {
-    return conn.sendMessage(
-      chatId,
-      {
-        text:
+    return conn.sendMessage(chatId, {
+      text:
 `✳️ 𝙐𝙨𝙖:
 ${pref}${command} <enlace>
-📌 Ej: ${pref}${command} https://fb.watch/ncowLHMp-x/`
-      },
-      { quoted: msg }
-    );
+Ej: ${pref}${command} https://www.instagram.com/reel/DPO9MwWjjY_/`
+    }, { quoted: msg });
   }
 
-  if (!/(facebook\.com|fb\.watch)/i.test(text)) {
-    return conn.sendMessage(
-      chatId,
-      {
-        text:
+  if (!isIG(text)) {
+    return conn.sendMessage(chatId, {
+      text:
 `❌ 𝙀𝙣𝙡𝙖𝙘𝙚 𝙞𝙣𝙫𝙖́𝙡𝙞𝙙𝙤.
 
 ✳️ 𝙐𝙨𝙖:
-${pref}${command} <enlace>
-📌 Ej: ${pref}${command} https://fb.watch/ncowLHMp-x/`
-      },
-      { quoted: msg }
-    );
+${pref}${command} <enlace IG>`
+    }, { quoted: msg });
   }
 
   try {
     await conn.sendMessage(chatId, { react: { text: "⏳", key: msg.key } });
 
-    // Llama a tu API Sky
-    const sky = await callSkyFacebook(text);
-    const d = sky.data || {};
-    const videoUrl = d.video_hd || d.video_sd;
-    if (!videoUrl) {
-      return conn.sendMessage(chatId, { text: "🚫 𝙉𝙤 𝙨𝙚 𝙥𝙪𝙙𝙤 𝙤𝙗𝙩𝙚𝙣𝙚𝙧 𝙚𝙡 𝙫𝙞𝙙𝙚𝙤." }, { quoted: msg });
-    }
+    // 1) Pide a tu API
+    const data = await callSkyInstagram(text);
+    const items = data.media || [];
+    if (!items.length) throw new Error("no_media");
 
-    // Descarga temporal
-    const tmpDir = path.resolve("./tmp");
-    if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
-    const filePath = path.join(tmpDir, `fb-${Date.now()}.mp4`);
-
-    const videoRes = await axios.get(videoUrl, { responseType: "stream", timeout: 120000 });
-    await new Promise((resolve, reject) => {
-      const writer = fs.createWriteStream(filePath);
-      videoRes.data.pipe(writer);
-      writer.on("finish", resolve);
-      writer.on("error", reject);
-    });
-
-    // Límite de tamaño
-    const sizeMB = fs.statSync(filePath).size / (1024 * 1024);
-    if (sizeMB > MAX_MB) {
-      fs.unlinkSync(filePath);
-      return conn.sendMessage(
-        chatId,
-        {
-          text:
-`⚠️ 𝙀𝙡 𝙖𝙧𝙘𝙝𝙞𝙫𝙤 𝙥𝙚𝙨𝙖 ${sizeMB.toFixed(2)} MB.
-🔒 𝙎𝙤𝙡𝙤 𝙨𝙚 𝙥𝙚𝙧𝙢𝙞𝙩𝙚𝙣 𝙫𝙞𝙙𝙚𝙤𝙨 < ${MAX_MB} MB.`
-        },
-        { quoted: msg }
-      );
-    }
-
-    // Caption “Suki” futurista
-    const resos = [
-      d.video_hd ? "HD" : null,
-      d.video_sd && !d.video_hd ? "SD" : d.video_sd ? "SD (alt)" : null
-    ].filter(Boolean).join(" · ") || "Auto";
-
+    // 2) Caption estilo Suki futurista
+    const author = data.author ? `@${data.author}` : "desconocido";
     const caption =
-`⚡ 𝗙𝗮𝗰𝗲𝗯𝗼𝗼𝗸 𝗩𝗶𝗱𝗲𝗼 — 𝗟𝗶𝘀𝘁𝗼
+`⚡ 𝗜𝗻𝘀𝘁𝗮𝗴𝗿𝗮𝗺 — 𝗗𝗲𝘀𝗰𝗮𝗿𝗴𝗮 𝗹𝗶𝘀𝘁𝗮
 
-✦ 𝗧𝗶́𝘁𝘂𝗹𝗼: ${d.title || "Facebook Video"}
-✦ 𝗗𝘂𝗿𝗮𝗰𝗶𝗼́𝗻: ${fmtDur(d.duration)}
-✦ 𝗥𝗲𝘀𝗼𝗹𝘂𝗰𝗶𝗼́𝗻: ${resos}
+✦ 𝗔𝘂𝘁𝗼𝗿: ${author}
+✦ 𝗘𝗹𝗲𝗺𝗲𝗻𝘁𝗼𝘀: ${items.length}
 ✦ 𝗦𝗼𝘂𝗿𝗰𝗲: api-sky.ultraplus.click
 
 ────────────
 🤖 𝙎𝙪𝙠𝙞 𝘽𝙤𝙩`;
 
-    await conn.sendMessage(
-      chatId,
-      {
-        video: fs.readFileSync(filePath),
-        mimetype: "video/mp4",
-        caption
-      },
-      { quoted: msg }
-    );
+    // 3) Envío (respeta límite 99 MB en videos)
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      const isVideo = String(it.type || "").toLowerCase() === "video";
+      const url = it.url;
 
-    // Limpieza + reacción ok
-    fs.unlinkSync(filePath);
+      // descarga temporal
+      const { path: fpath, mime } = await downloadToTmp(url, isVideo ? "mp4" : "jpg");
+      const size = fs.statSync(fpath).size;
+      const sizeMB = mb(size);
+
+      if (isVideo && sizeMB > MAX_MB) {
+        fs.unlinkSync(fpath);
+        await conn.sendMessage(chatId, {
+          text:
+`❌ 𝙑𝙞𝙙𝙚𝙤 ${i + 1}/${items.length} ≈ ${sizeMB.toFixed(2)} MB — supera el límite de ${MAX_MB} MB.
+🔗 𝙀𝙣𝙡𝙖𝙘𝙚: ${url}`
+        }, { quoted: msg });
+        continue;
+      }
+
+      try {
+        if (isVideo) {
+          await conn.sendMessage(chatId, {
+            video: fs.readFileSync(fpath),
+            mimetype: "video/mp4",
+            caption: i === 0 ? caption : undefined
+          }, { quoted: msg });
+        } else {
+          await conn.sendMessage(chatId, {
+            image: fs.readFileSync(fpath),
+            mimetype: mime || "image/jpeg",
+            caption: i === 0 ? caption : undefined
+          }, { quoted: msg });
+        }
+      } finally {
+        fs.unlinkSync(fpath);
+      }
+    }
+
     await conn.sendMessage(chatId, { react: { text: "✅", key: msg.key } });
 
   } catch (err) {
-    console.error("❌ Error en comando Facebook (Sky):", err?.message || err);
-    await conn.sendMessage(
-      chatId,
-      { text: "❌ 𝙊𝙘𝙪𝙧𝙧𝙞𝙤́ 𝙪𝙣 𝙚𝙧𝙧𝙤𝙧 𝙖𝙡 𝙥𝙧𝙤𝙘𝙚𝙨𝙖𝙧 𝙚𝙡 𝙫𝙞𝙙𝙚𝙤 𝙙𝙚 𝙁𝙖𝙘𝙚𝙗𝙤𝙤𝙠." },
-      { quoted: msg }
-    );
+    console.error("❌ Error en comando Instagram (Sky .js):", err?.message || err);
+    // mensajes más claros según el caso común
+    const msgTxt =
+      /404/.test(String(err?.message)) ? "❌ Ruta de API no encontrada (404). Verifica /api/download/instagram en tu servidor." :
+      /401|missing_api_key|invalid/.test(String(err?.message)) ? "🔐 API Key inválida o ausente en api-sky.ultraplus.click." :
+      /no_media|no_video/i.test(String(err?.message)) ? "🚫 No se encontró media descargable en ese enlace." :
+      "❌ Ocurrió un error al procesar el enlace de Instagram.";
+    await conn.sendMessage(chatId, { text: msgTxt }, { quoted: msg });
     await conn.sendMessage(chatId, { react: { text: "❌", key: msg.key } });
   }
 };
 
-handler.command = ["facebook", "fb"];
-handler.help = ["facebook <url>", "fb <url>"];
+handler.command = ["instagram", "ig"];
+handler.help = ["instagram <url>", "ig <url>"];
 handler.tags = ["descargas"];
 handler.register = true;
 
