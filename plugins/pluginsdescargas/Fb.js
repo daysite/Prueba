@@ -4,7 +4,7 @@ const fs = require("fs");
 const path = require("path");
 
 const API_BASE = "https://api-sky.ultraplus.click";
-const SKY_API_KEY = process.env.SKY_API_KEY || global.SKY_API_KEY || ""; // <-- pon tu key
+const SKY_API_KEY = process.env.SKY_API_KEY || global.SKY_API_KEY || "Russellxz"; // <-- pon tu key
 const MAX_MB = 99;
 
 function fmtDur(s) {
