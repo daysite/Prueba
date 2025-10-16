@@ -1,8 +1,14 @@
-// comandos/ytmp4.js — YouTube -> VIDEO (Sky API) con selección 👍 / ❤️ o 1 / 2, SIN límite
+// comandos/ytmp4.js — YouTube -> VIDEO (Sky API) con selección 👍 / ❤️ o 1 / 2, SIN límite + sin timeout
 const axios = require("axios");
 
 const API_BASE = process.env.API_BASE || "https://api-sky.ultraplus.click";
 const API_KEY  = process.env.API_KEY  || "Russellxz";
+
+// Desactivar timeout y permitir grandes respuestas si algún upstream devuelve un JSON algo “pesado”
+const AXIOS_TIMEOUT = 0; // 0 = sin timeout
+axios.defaults.timeout = AXIOS_TIMEOUT;
+axios.defaults.maxBodyLength = Infinity;
+axios.defaults.maxContentLength = Infinity;
 
 function isYouTube(u) {
   return /^https?:\/\//i.test(u) && /(youtube\.com|youtu\.be|music\.youtube\.com)/i.test(u);
@@ -14,23 +20,76 @@ function fmtDur(s) {
   const sec = n % 60;
   return (h ? `${h}:` : "") + `${m.toString().padStart(2,"0")}:${sec.toString().padStart(2,"0")}`;
 }
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 // Jobs pendientes por id del mensaje con opciones
 const pendingYTV = Object.create(null);
 
+// Llama a tu API con retries + fallback (.js -> .php), sin timeout
 async function callSkyYtVideo(url){
-  const r = await axios.get(`${API_BASE}/api/download/yt.php`, {
-    params: { url, format: "video" },
-    headers: { Authorization: `Bearer ${API_KEY}`, "X-API-Key": API_KEY },
-    timeout: 30000,
-    validateStatus: s => s < 500
-  });
-  if (r.status !== 200 || r.data?.status !== "true")
-    throw new Error(`API ${r.status}: ${JSON.stringify(r.data)}`);
-  const d = r.data.data || {};
-  const mediaUrl = d.video || d.audio;
-  if (!mediaUrl) throw new Error("El API no devolvió video.");
-  return { mediaUrl, meta: d };
+  const endpoints = ["/api/download/yt.js", "/api/download/yt.php"];
+  const headers = {
+    Authorization: `Bearer ${API_KEY}`,
+    "X-API-Key": API_KEY,
+    Accept: "application/json"
+  };
+  const params = { url, format: "video" };
+
+  let lastErr = null;
+
+  for (const ep of endpoints) {
+    // 3 intentos por endpoint con backoff 1s, 2s, 3s
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const r = await axios.get(`${API_BASE}${ep}`, {
+          params,
+          headers,
+          timeout: AXIOS_TIMEOUT,
+          maxRedirects: 5,
+          // Aceptamos cualquier HTTP y validamos nosotros
+          validateStatus: () => true
+        });
+
+        // If Cloudflare/proxy manda 52x o 403 de modo ataque, reintenta
+        if (r.status >= 500 || r.status === 429 || r.status === 403) {
+          lastErr = new Error(`HTTP ${r.status}${r.data?.error ? ` - ${r.data.error}` : ""}`);
+          await sleep(1000 * attempt);
+          continue;
+        }
+
+        if (r.status !== 200) {
+          lastErr = new Error(`HTTP ${r.status}`);
+          await sleep(1000 * attempt);
+          continue;
+        }
+
+        // Estructura esperada: { status:'true', data:{ title, audio?, video?, thumbnail?, duration? } }
+        const ok = r.data && r.data.status === "true" && r.data.data;
+        if (!ok) {
+          lastErr = new Error(`API inválida: ${JSON.stringify(r.data)}`);
+          await sleep(1000 * attempt);
+          continue;
+        }
+
+        const d = r.data.data || {};
+        const mediaUrl = d.video || d.audio;
+        if (!mediaUrl) {
+          lastErr = new Error("El API no devolvió video.");
+          await sleep(1000 * attempt);
+          continue;
+        }
+
+        return { mediaUrl, meta: d };
+      } catch (e) {
+        // Network/timeout/etc — reintento
+        lastErr = e;
+        await sleep(1000 * attempt);
+      }
+    }
+    // sigue al próximo endpoint
+  }
+
+  throw lastErr || new Error("No se pudo obtener el video.");
 }
 
 const handler = async (msg, { conn, args, command }) => {
@@ -50,7 +109,7 @@ const handler = async (msg, { conn, args, command }) => {
   try {
     await conn.sendMessage(jid, { react: { text: "⏱️", key: msg.key } });
 
-    // 1) Pide a tu API
+    // 1) Pide a tu API (sin timeout + retries + fallback)
     const { mediaUrl, meta } = await callSkyYtVideo(url);
     const title = meta.title || "YouTube Video";
     const dur   = meta.duration ? fmtDur(meta.duration) : "—";
@@ -114,7 +173,7 @@ Elige cómo enviarlo:
                 const asDoc = txt === "2";
                 await sendVideo(conn, job, asDoc, m);
                 delete pendingYTV[replyTo];
-              } else {
+              } else if (txt) {
                 await conn.sendMessage(job.chatId, {
                   text: "⚠️ Responde con *1* (video) o *2* (documento), o reacciona con 👍 / ❤️."
                 }, { quoted: job.baseMsg });
