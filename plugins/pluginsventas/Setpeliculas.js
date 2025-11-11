@@ -1,6 +1,5 @@
 const fs = require("fs");
 const path = require("path");
-const { downloadContentFromMessage } = require("@whiskeysockets/baileys");
 
 // ——— Helpers LID-aware + texto ———
 const DIGITS = (s = "") => String(s).replace(/\D/g, "");
@@ -76,14 +75,13 @@ function extractAfterCommand(body, cmd, prefixes = []) {
     const tag = (p + cmd).toLowerCase();
     if (low.startsWith(tag)) {
       const out = body.slice(tag.length);
-      // quita SOLO un espacio inicial si lo hay, no toques \n ni más espacios
       return out.startsWith(" ") ? out.slice(1) : out;
     }
   }
-  return ""; // no se encontró patrón claro
+  return "";
 }
 
-const handler = async (msg, { conn, args, text }) => {
+const handler = async (msg, { conn, args, text, wa }) => {
   const chatId    = msg.key.remoteJid;
   const isGroup   = chatId.endsWith("@g.us");
   const senderJid = msg.key.participant || msg.key.remoteJid; // puede ser @lid
@@ -107,7 +105,6 @@ const handler = async (msg, { conn, args, text }) => {
   const bodyRaw       = getBody(msg);
   const prefixes      = Array.isArray(global.prefixes) ? global.prefixes : ["."];
   const textoFromBody = extractAfterCommand(bodyRaw, "setpeliculas", prefixes);
-  // prioridad: texto exacto del cuerpo tras el comando > parámetro text > args.join
   const textoCrudo    = (textoFromBody !== "" ? textoFromBody : (typeof text === "string" ? text : (Array.isArray(args) ? args.join(" ") : "")));
 
   // Texto del citado si no escribieron nada
@@ -129,7 +126,7 @@ const handler = async (msg, { conn, args, text }) => {
   let imagenBase64 = null;
   if (quotedImage) {
     try {
-      const stream = await downloadContentFromMessage(quotedImage, "image");
+      const stream = await wa.downloadContentFromMessage(quotedImage, "image");
       let buffer = Buffer.alloc(0);
       for await (const chunk of stream) buffer = Buffer.concat([buffer, chunk]);
       imagenBase64 = buffer.toString("base64");
