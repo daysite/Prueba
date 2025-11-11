@@ -1,8 +1,29 @@
-// Compatible con Baileys ESM: NO importes desde '@whiskeysockets/baileys' aquí.
-// Usa `wa.downloadContentFromMessage` inyectado desde tu index.js.
+// Compatible con Baileys ESM/CJS sin importar aquí.
+// Usa wa del contexto, o cae a conn.wa / global.wa.
 
-const handler = async (msg, { conn, wa }) => {
+const handler = async (msg, ctx = {}) => {
+  const { conn } = ctx;
+
+  // 🔧 Compat: asegura wa aunque el dispatcher no lo pase
+  const wa =
+    (ctx.wa && typeof ctx.wa.downloadContentFromMessage === "function")
+      ? ctx.wa
+      : (conn && conn.wa && typeof conn.wa.downloadContentFromMessage === "function")
+        ? conn.wa
+        : (global.wa && typeof global.wa.downloadContentFromMessage === "function")
+          ? global.wa
+          : null;
+
   try {
+    if (!wa) {
+      // Sin wa disponible: avisamos y salimos limpio
+      return await conn.sendMessage(
+        msg.key.remoteJid,
+        { text: "⚠️ Falta el helper de medios. Reinicia el bot (index.js ya inyecta `global.wa`)." },
+        { quoted: msg }
+      );
+    }
+
     const quoted = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
     if (!quoted) {
       return conn.sendMessage(
@@ -50,7 +71,7 @@ const handler = async (msg, { conn, wa }) => {
 
     await conn.sendMessage(msg.key.remoteJid, { react: { text: "⏳", key: msg.key } });
 
-    // 👉 Usar wa.downloadContentFromMessage (inyectado)
+    // ✅ usar wa.downloadContentFromMessage garantizado
     const stream = await wa.downloadContentFromMessage(mediaMsg, mediaType);
     let buf = Buffer.alloc(0);
     for await (const chunk of stream) buf = Buffer.concat([buf, chunk]);
@@ -66,6 +87,7 @@ const handler = async (msg, { conn, wa }) => {
       opts.caption = credit;
     } else {
       opts.audio = buf;
+      // Mostrar como nota de voz si el original lo era (o por defecto true)
       opts.ptt = mediaMsg.ptt ?? true;
       if (mediaMsg.seconds) opts.seconds = mediaMsg.seconds;
     }
