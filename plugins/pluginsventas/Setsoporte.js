@@ -1,6 +1,5 @@
 const fs = require("fs");
 const path = require("path");
-const { downloadContentFromMessage } = require("@whiskeysockets/baileys");
 
 // ——— Helpers LID-aware ———
 const DIGITS = (s = "") => String(s).replace(/\D/g, "");
@@ -60,7 +59,7 @@ function getQuotedText(msg) {
   );
 }
 
-const handler = async (msg, { conn, args, text }) => {
+const handler = async (msg, { conn, args, text, wa }) => {
   const chatId    = msg.key.remoteJid;
   const isGroup   = chatId.endsWith("@g.us");
   const senderJid = msg.key.participant || msg.key.remoteJid; // puede ser @lid
@@ -71,10 +70,9 @@ const handler = async (msg, { conn, args, text }) => {
     return conn.sendMessage(chatId, { text: "❌ Este comando solo funciona en grupos." }, { quoted: msg });
   }
 
-  // Permisos: admin / owner / bot
+  // Permisos: admin / owner / bot (LID-aware)
   const isAdmin = await isAdminByNumber(conn, chatId, senderNum);
-  const owners  = Array.isArray(global.owner) ? global.owner : [];
-  const isOwner = owners.some(([id]) => id === senderNum);
+  const isOwner = Array.isArray(global.owner) && global.owner.some(([id]) => id === senderNum);
 
   if (!isAdmin && !isOwner && !isFromMe) {
     return conn.sendMessage(chatId, { text: "🚫 Este comando solo puede ser usado por administradores." }, { quoted: msg });
@@ -103,7 +101,7 @@ const handler = async (msg, { conn, args, text }) => {
   let imagenBase64 = null;
   if (quotedImage) {
     try {
-      const stream = await downloadContentFromMessage(quotedImage, "image");
+      const stream = await wa.downloadContentFromMessage(quotedImage, "image");
       let buffer = Buffer.alloc(0);
       for await (const chunk of stream) buffer = Buffer.concat([buffer, chunk]);
       imagenBase64 = buffer.toString("base64");
