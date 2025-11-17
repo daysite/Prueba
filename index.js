@@ -1,5 +1,5 @@
-let canalId = ["120363266665814365@newsletter"];  
-let canalNombre = ["👑 LA SUKI BOT 👑"]
+let canalId = ["120363401360971612@newsletter"];  
+let canalNombre = ["Aneka"]
   function setupConnection(conn) {
   conn.sendMessage2 = async (chat, content, m, options = {}) => {
     const firstChannel = { 
@@ -70,7 +70,7 @@ global.prefixes = defaultPrefixes;
 
 // 🧑‍💼 Owners desde owner.json
 const ownerPath = "./owner.json";
-if (!fs.existsSync(ownerPath)) fs.writeFileSync(ownerPath, JSON.stringify([["15167096032"]], null, 2));
+if (!fs.existsSync(ownerPath)) fs.writeFileSync(ownerPath, JSON.stringify([["5493884539290"]], null, 2));
 global.owner = JSON.parse(fs.readFileSync(ownerPath));
 
 // 📂 Cargar plugins
@@ -106,7 +106,7 @@ global.isOwner = function (jid) {
 };
 
 // 🎨 Banner y opciones
-console.log(chalk.cyan(figlet.textSync("Suki 3.0 Bot", { font: "Standard" })));
+console.log(chalk.cyan(f deiglet.textSync("Suki 3.0 Bot", { font: "Standard" })));
 console.log(chalk.green("\n✅ Iniciando conexión...\n"));
 console.log(chalk.green("  [Hola] ") + chalk.white("🔑 Ingresar Tu Numero(Ej: 54911XXXXXX)\n"));
 
@@ -161,7 +161,7 @@ let phoneNumber = "";
           creds: state.creds,
           keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "silent" })),
         },
-        browser: method === "1" ? ["AzuraBot", "Safari", "1.0.0"] : ["Ubuntu", "Chrome", "20.0.04"],
+        browser: method === "1" ? ["Aneka", "Safari", "1.0.0"] : ["Ubuntu", "Chrome", "20.0.04"],
         printQRInTerminal: method === "1",
       });
 
@@ -520,7 +520,7 @@ try {
         caption: `
 🎉 ¡Hola a todos! 🎉
 
-👋 Soy *La Suki Bot*, un bot programado 🤖.  
+👋 Soy *Aneka Bot*, un bot programado 🤖.  
 📸 A veces reacciono o envío multimedia porque así me diseñaron.  
 
 ⚠️ *Lo que diga no debe ser tomado en serio.* 😉
