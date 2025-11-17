@@ -516,7 +516,7 @@ try {
     if (!welcomeData[chatId].presentationSent) {
       // Enviar vídeo de presentación
       await sock.sendMessage(chatId, {
-        video: { url: "https://cdn.russellxz.click/bc06f25b.mp4" },
+        video: { url: "https://files.catbox.moe/1sqrsm.mp4" },
         caption: `
 🎉 ¡Hola a todos! 🎉
 
