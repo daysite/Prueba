@@ -20,7 +20,7 @@ const handler = async (msg, { conn }) => {
 
   const caption = `
 ╔════════════════════╗
-║🤖 *ALL MENU LA SUKI BOT*
+║🤖 *ALL MENU ANEKA BOT*
 ╚════════════════════╝
 
 🧠 *Bot creado desde cero.*
@@ -30,11 +30,11 @@ const handler = async (msg, { conn }) => {
 📦 *Lista de comandos:*
 ${todosLosComandos.map(c => `➤ ${prefijo}${c}`).join("\n")}
   
-💫 *Gracias por usar suki Omega.*
+💫 *Gracias por usar Aneka.*
 `.trim();
 
   return conn.sendMessage2(chatId, {
-    image: { url: "https://cdn.russellxz.click/40df9bcb.jpeg" },
+    image: { url: "https://files.catbox.moe/qjxfxs.jpg" },
     caption
   }, msg);
 };
