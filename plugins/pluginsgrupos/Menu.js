@@ -136,11 +136,11 @@ const handler = async (msg, { conn }) => {
 │๛ ${pref}menurpg
 ╰─────◆
 
-✨ Gracias por usar *La Suki Bot*. Eres adorable 💖
+✨ Gracias por usar *Aneka Bot*.
 `.trim();
 
   await conn.sendMessage2(chatId, {
-    video: { url: "https://cdn.russellxz.click/a289f34c.mp4" },
+    video: { url: "https://files.catbox.moe/1sqrsm.mp4" },
     gifPlayback: true,
     caption
   }, msg);
