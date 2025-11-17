@@ -32,7 +32,7 @@ const handler = async (msg, { conn }) => {
     console.error("[menu] Error leyendo setmenu.json:", e);
   }
 
-  const caption = `𖠺𝐿𝑎 𝑆𝑢𝑘𝑖 𝐵𝑜𝑡𖠺
+  const caption = `Aneka Bot
 
 𖠁𝙈𝙀𝙉𝙐 𝙂𝙀𝙉𝙀𝙍𝘼𝙇𖠁
 𖠁𝗣𝗿𝗲𝗳𝗶𝗷𝗼 𝗔𝗰𝘁𝘂𝗮𝗹: 『 ${pref} 』
