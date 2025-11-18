@@ -106,7 +106,7 @@ global.isOwner = function (jid) {
 };
 
 // 🎨 Banner y opciones
-console.log(chalk.cyan(figlet.textSync("Aneka Bot", { font: "Standard" })));
+console.log(chalk.cyan(figlet.textSync("Suki 3.0 Bot", { font: "Standard" })));
 console.log(chalk.green("\n✅ Iniciando conexión...\n"));
 console.log(chalk.green("  [Hola] ") + chalk.white("🔑 Ingresar Tu Numero(Ej: 54911XXXXXX)\n"));
 
